@@ -5,11 +5,23 @@ const session = require('express-session');
 const fetch = require('node-fetch');
 const path = require('path');
 const fs = require('fs');
+const nodemailer = require('nodemailer');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 const ADMIN_USER = process.env.ADMIN || 'tjeerd';
 const API_KEY = process.env.FOOTBALL_API_KEY || ''; // football-data.org API key
+
+// Deadline: no predictions after June 10, 2026 23:59 CET (= June 10 21:59 UTC)
+const DEADLINE = new Date(process.env.DEADLINE || '2026-06-10T21:59:00Z');
+
+// Email transporter (set SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, SMTP_FROM in env)
+const mailer = process.env.SMTP_HOST ? nodemailer.createTransport({
+  host: process.env.SMTP_HOST,
+  port: parseInt(process.env.SMTP_PORT || '587'),
+  secure: process.env.SMTP_SECURE === 'true',
+  auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS }
+}) : null;
 
 // DB setup
 const db = new Database('pool.db');
@@ -18,6 +30,7 @@ db.exec(`
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT UNIQUE NOT NULL,
     password TEXT NOT NULL,
+    email TEXT,
     is_admin INTEGER DEFAULT 0,
     created_at TEXT DEFAULT (datetime('now'))
   );
@@ -59,6 +72,9 @@ db.exec(`
     UNIQUE(user_id, group_name, position)
   );
 `);
+
+// Migrate: add email column if not present (existing DBs)
+try { db.exec('ALTER TABLE users ADD COLUMN email TEXT'); } catch(e) {}
 
 // Seed WK 2026 groups & matches (static data as fallback)
 const WK_GROUPS = {
@@ -132,12 +148,13 @@ const requireAdmin = (req, res, next) => {
 
 // ---- AUTH ROUTES ----
 app.post('/api/register', (req, res) => {
-  const { name, password } = req.body;
+  const { name, password, email } = req.body;
   if (!name || !password || password.length < 4) return res.status(400).json({ error: 'Naam en wachtwoord (min 4 tekens) verplicht' });
+  if (!email || !email.includes('@')) return res.status(400).json({ error: 'Geldig e-mailadres verplicht' });
   const hash = bcrypt.hashSync(password, 10);
   const isAdmin = name.toLowerCase() === ADMIN_USER.toLowerCase() ? 1 : 0;
   try {
-    const result = db.prepare('INSERT INTO users (name, password, is_admin) VALUES (?, ?, ?)').run(name, hash, isAdmin);
+    const result = db.prepare('INSERT INTO users (name, password, email, is_admin) VALUES (?, ?, ?, ?)').run(name, hash, email, isAdmin);
     req.session.userId = result.lastInsertRowid;
     req.session.userName = name;
     req.session.isAdmin = isAdmin === 1;
@@ -181,7 +198,12 @@ app.get('/api/predictions', requireAuth, (req, res) => {
   res.json({ matchPredictions: preds, tournamentPrediction: tp || {}, groupPredictions: gp });
 });
 
+app.get('/api/deadline', (req, res) => {
+  res.json({ deadline: DEADLINE.toISOString(), locked: new Date() >= DEADLINE });
+});
+
 app.post('/api/predictions/match', requireAuth, (req, res) => {
+  if (new Date() >= DEADLINE) return res.status(403).json({ error: 'Inzendingen gesloten – deadline verstreken' });
   const { matchId, homeScore, awayScore } = req.body;
   if (homeScore === undefined || awayScore === undefined) return res.status(400).json({ error: 'Scores verplicht' });
   const match = db.prepare('SELECT * FROM matches WHERE id = ?').get(matchId);
@@ -194,6 +216,7 @@ app.post('/api/predictions/match', requireAuth, (req, res) => {
 });
 
 app.post('/api/predictions/tournament', requireAuth, (req, res) => {
+  if (new Date() >= DEADLINE) return res.status(403).json({ error: 'Inzendingen gesloten – deadline verstreken' });
   const { winner, topScorer } = req.body;
   db.prepare(`INSERT INTO tournament_predictions (user_id, winner, top_scorer) VALUES (?, ?, ?)
     ON CONFLICT(user_id) DO UPDATE SET winner=excluded.winner, top_scorer=excluded.top_scorer`
@@ -202,6 +225,7 @@ app.post('/api/predictions/tournament', requireAuth, (req, res) => {
 });
 
 app.post('/api/predictions/group', requireAuth, (req, res) => {
+  if (new Date() >= DEADLINE) return res.status(403).json({ error: 'Inzendingen gesloten – deadline verstreken' });
   const { groupName, ranking } = req.body; // ranking = ['TeamA','TeamB','TeamC','TeamD']
   if (!groupName || !ranking || ranking.length !== 4) return res.status(400).json({ error: 'Ongeldige groepsranking' });
   const del = db.prepare('DELETE FROM group_predictions WHERE user_id = ? AND group_name = ?');
@@ -258,45 +282,4 @@ async function fetchLiveScores() {
     for (const m of (data.matches || [])) {
       const score = m.score?.fullTime;
       if (score) update.run(score.home, score.away, m.status, m.id);
-    }
-    console.log('[Live] Scores bijgewerkt');
-  } catch(e) {
-    console.error('[Live] Fout bij ophalen scores:', e.message);
-  }
-}
-
-// Fetch every 5 minutes
-if (API_KEY) {
-  fetchLiveScores();
-  setInterval(fetchLiveScores, 5 * 60 * 1000);
-}
-
-// ---- ADMIN ----
-app.get('/api/admin/users', requireAuth, requireAdmin, (req, res) => {
-  const users = db.prepare('SELECT id, name, is_admin, created_at FROM users').all();
-  res.json(users);
-});
-
-app.post('/api/admin/score', requireAuth, requireAdmin, (req, res) => {
-  const { matchId, homeScore, awayScore } = req.body;
-  db.prepare("UPDATE matches SET home_score=?, away_score=?, status='FINISHED' WHERE id=?").run(homeScore, awayScore, matchId);
-  res.json({ success: true });
-});
-
-app.post('/api/admin/reset', requireAuth, requireAdmin, (req, res) => {
-  const { matchId } = req.body;
-  db.prepare("UPDATE matches SET home_score=NULL, away_score=NULL, status='TIMED' WHERE id=?").run(matchId);
-  res.json({ success: true });
-});
-
-app.delete('/api/admin/user/:id', requireAuth, requireAdmin, (req, res) => {
-  db.prepare('DELETE FROM users WHERE id = ? AND is_admin = 0').run(req.params.id);
-  res.json({ success: true });
-});
-
-app.get('/api/groups', requireAuth, (req, res) => {
-  res.json(WK2026_GROUPS);
-});
-
-app.listen(PORT, () => {
-  console.log(`\n🚕 SnelEenTaxi W
+   
