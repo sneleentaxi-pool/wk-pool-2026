@@ -712,4 +712,85 @@ function renderAdminMatches() {
 
   container.innerHTML = filtered.map(m => {
     const isFinished = m.status === 'FINISHED';
-    return `<di
+    return `<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border);flex-wrap:wrap">
+      <span style="flex:1;font-size:.875rem">
+        ${isFinished ? `<span style="color:var(--green);font-size:.7rem">✅ GESPEELD</span> ` : ''}
+        <strong>${m.home_team}</strong> vs <strong>${m.away_team}</strong>
+        <span style="color:var(--text-muted);font-size:.75rem"> (Gr.${m.group_name})</span>
+        ${isFinished ? `<span style="color:var(--text-muted);font-size:.75rem"> | Uitslag: ${m.home_score}–${m.away_score}</span>` : ''}
+      </span>
+      <input type="number" min="0" max="20" placeholder="${isFinished ? m.home_score : 'Thuis'}" style="width:60px;padding:5px;background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--text)" id="ah${m.id}">
+      <span>–</span>
+      <input type="number" min="0" max="20" placeholder="${isFinished ? m.away_score : 'Uit'}" style="width:60px;padding:5px;background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--text)" id="aa${m.id}">
+      <button class="btn btn-sm btn-primary" onclick="adminScore(${m.id})" title="Uitslag opslaan">✓</button>
+      ${isFinished ? `<button class="btn btn-sm btn-danger" onclick="adminReset(${m.id})" title="Reset uitslag">↺</button>` : ''}
+    </div>`;
+  }).join('') || '<p style="color:var(--text-muted);font-size:.875rem">Geen wedstrijden gevonden.</p>';
+}
+
+async function loadAdmin() {
+  const [matches, users] = await Promise.all([api('/api/matches'), api('/api/admin/users')]);
+  adminAllMatches = matches;
+  setAdminFilter(adminFilter);
+
+  const tbody = document.getElementById('adminUsersTable');
+  tbody.innerHTML = users.map(u => `<tr>
+    <td>${u.name}</td>
+    <td style="font-size:.8rem;color:var(--text-muted)">${u.created_at?.split('T')[0]||''}</td>
+    <td>${u.is_admin ? '✅ Ja' : '—'}</td>
+    <td>${!u.is_admin ? `<button class="btn btn-danger btn-sm" onclick="adminDeleteUser(${u.id},'${u.name}')">Verwijderen</button>` : ''}</td>
+  </tr>`).join('');
+}
+
+async function adminScore(matchId) {
+  const h = parseInt(document.getElementById('ah'+matchId)?.value);
+  const a = parseInt(document.getElementById('aa'+matchId)?.value);
+  if (isNaN(h) || isNaN(a)) { showToast('Voer beide scores in', 'error'); return; }
+  const r = await api('/api/admin/score', { method:'POST', body:{matchId, homeScore:h, awayScore:a} });
+  if (r.success) { showToast('Uitslag opgeslagen!', 'success'); adminAllMatches = []; loadAdmin(); allMatches = []; }
+}
+
+async function adminReset(matchId) {
+  if (!confirm('Uitslag resetten? Dit verwijdert de score van deze wedstrijd.')) return;
+  const r = await api('/api/admin/reset', { method:'POST', body:{matchId} });
+  if (r.success) { showToast('Uitslag gereset', 'success'); adminAllMatches = []; loadAdmin(); allMatches = []; }
+}
+
+async function adminDeleteUser(id, name) {
+  if (!confirm(`Verwijder ${name}?`)) return;
+  await api(`/api/admin/user/${id}`, { method:'DELETE' });
+  loadAdmin();
+}
+
+// ---- HELPERS ----
+async function api(url, opts = {}) {
+  const r = await fetch(url, {
+    method: opts.method || 'GET',
+    headers: { 'Content-Type': 'application/json' },
+    body: opts.body ? JSON.stringify(opts.body) : undefined
+  });
+  return r.json();
+}
+
+function showToast(msg, type='success') {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'toast show ' + type;
+  setTimeout(() => t.className = 'toast', 2500);
+}
+
+function formatDate(d) {
+  if (!d) return '';
+  const date = new Date(d);
+  return date.toLocaleDateString('nl-NL', { day:'numeric', month:'short' });
+}
+
+const FLAGS = {
+  'Mexico':'🇲🇽','USA':'🇺🇸','Canada':'🇨🇦','Ecuador':'🇪🇨','Spain':'🇪🇸','France':'🇫🇷','Morocco':'🇲🇦','Algeria':'🇩🇿','Brazil':'🇧🇷','Argentina':'🇦🇷','Colombia':'🇨🇴','Uruguay':'🇺🇾','Germany':'🇩🇪','Netherlands':'🇳🇱','Belgium':'🇧🇪','Denmark':'🇩🇰','England':'🏴󠁧󠁢󠁥󠁮󠁧󠁿','Portugal':'🇵🇹','Poland':'🇵🇱','Croatia':'🇭🇷','Japan':'🇯🇵','South Korea':'🇰🇷','Australia':'🇦🇺','Iran':'🇮🇷','Senegal':'🇸🇳','Nigeria':'🇳🇬','Egypt':'🇪🇬','Tunisia':'🇹🇳','Saudi Arabia':'🇸🇦','Qatar':'🇶🇦','UAE':'🇦🇪','Iraq':'🇮🇶','Serbia':'🇷🇸','Switzerland':'🇨🇭','Austria':'🇦🇹','Czech Republic':'🇨🇿','Chile':'🇨🇱','Peru':'🇵🇪','Bolivia':'🇧🇴','Venezuela':'🇻🇪','Turkey':'🇹🇷','Greece':'🇬🇷','Romania':'🇷🇴','Slovakia':'🇸🇰','Ivory Coast':'🇨🇮','DR Congo':'🇨🇩','Cameroon':'🇨🇲','Ghana':'🇬🇭'
+};
+function teamFlag(t) { return FLAGS[t] || '🏳️'; }
+
+init();
+</script>
+</body>
+</html>
