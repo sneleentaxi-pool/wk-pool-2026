@@ -283,6 +283,12 @@ app.post('/api/admin/score', requireAuth, requireAdmin, (req, res) => {
   res.json({ success: true });
 });
 
+app.post('/api/admin/reset', requireAuth, requireAdmin, (req, res) => {
+  const { matchId } = req.body;
+  db.prepare("UPDATE matches SET home_score=NULL, away_score=NULL, status='TIMED' WHERE id=?").run(matchId);
+  res.json({ success: true });
+});
+
 app.delete('/api/admin/user/:id', requireAuth, requireAdmin, (req, res) => {
   db.prepare('DELETE FROM users WHERE id = ? AND is_admin = 0').run(req.params.id);
   res.json({ success: true });
@@ -293,7 +299,4 @@ app.get('/api/groups', requireAuth, (req, res) => {
 });
 
 app.listen(PORT, () => {
-  console.log(`\n🚕 SnelEenTaxi WK Pool draait op http://localhost:${PORT}`);
-  console.log(`👤 Admin account: maak een account aan met naam "${ADMIN_USER}"`);
-  if (!API_KEY) console.log(`⚠️  Geen FOOTBALL_API_KEY ingesteld. Scores handmatig invoeren via admin panel.`);
-});
+  console.log(`\n🚕 SnelEenTaxi W
