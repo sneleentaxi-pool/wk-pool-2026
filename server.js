@@ -179,6 +179,17 @@ app.post('/api/logout', (req, res) => {
   res.json({ success: true });
 });
 
+// One-time admin setup: GET /make-admin?secret=...&user=...
+app.get('/make-admin', (req, res) => {
+  const secret = process.env.ADMIN_SECRET || '';
+  if (!secret || req.query.secret !== secret) return res.status(403).send('Verboden');
+  const user = req.query.user;
+  if (!user) return res.status(400).send('Geef ?user=naam op');
+  const result = db.prepare('UPDATE users SET is_admin=1 WHERE name=?').run(user);
+  if (result.changes === 0) return res.status(404).send(`Gebruiker "${user}" niet gevonden`);
+  res.send(`✅ ${user} is nu admin. Log opnieuw in.`);
+});
+
 app.get('/api/me', (req, res) => {
   if (!req.session.userId) return res.json({ loggedIn: false });
   res.json({ loggedIn: true, name: req.session.userName, isAdmin: req.session.isAdmin });
@@ -269,6 +280,7 @@ app.get('/api/leaderboard', requireAuth, (req, res) => {
   res.json(results);
 });
 
+
 // ---- FETCH LIVE DATA ----
 async function fetchLiveScores() {
   if (!API_KEY) return;
@@ -282,4 +294,94 @@ async function fetchLiveScores() {
     for (const m of (data.matches || [])) {
       const score = m.score?.fullTime;
       if (score) update.run(score.home, score.away, m.status, m.id);
-   
+    }
+    console.log('[Live] Scores bijgewerkt');
+  } catch(e) {
+    console.error('[Live] Fout bij ophalen scores:', e.message);
+  }
+}
+
+if (API_KEY) {
+  fetchLiveScores();
+  setInterval(fetchLiveScores, 5 * 60 * 1000);
+}
+
+// ---- ADMIN ----
+app.get('/api/admin/users', requireAuth, requireAdmin, (req, res) => {
+  const users = db.prepare('SELECT id, name, is_admin, created_at FROM users').all();
+  res.json(users);
+});
+
+app.post('/api/admin/score', requireAuth, requireAdmin, (req, res) => {
+  const { matchId, homeScore, awayScore } = req.body;
+  db.prepare("UPDATE matches SET home_score=?, away_score=?, status='FINISHED' WHERE id=?").run(homeScore, awayScore, matchId);
+  res.json({ success: true });
+  sendRankingEmails(matchId).catch(e => console.error('[Mail] Fout:', e.message));
+});
+
+app.post('/api/admin/reset', requireAuth, requireAdmin, (req, res) => {
+  const { matchId } = req.body;
+  db.prepare("UPDATE matches SET home_score=NULL, away_score=NULL, status='TIMED' WHERE id=?").run(matchId);
+  res.json({ success: true });
+});
+
+app.delete('/api/admin/user/:id', requireAuth, requireAdmin, (req, res) => {
+  db.prepare('DELETE FROM users WHERE id = ? AND is_admin = 0').run(req.params.id);
+  res.json({ success: true });
+});
+
+app.get('/api/groups', requireAuth, (req, res) => {
+  res.json(WK2026_GROUPS);
+});
+
+// ---- EMAIL RANKING UPDATE ----
+async function sendRankingEmails(matchId) {
+  if (!mailer) return;
+  const match = db.prepare('SELECT * FROM matches WHERE id = ?').get(matchId);
+  if (!match) return;
+  const users = db.prepare('SELECT * FROM users WHERE email IS NOT NULL').all();
+  const finishedMatches = db.prepare("SELECT * FROM matches WHERE status = 'FINISHED'").all();
+  const ranking = users.map(user => {
+    let points = 0, exact = 0, correct = 0;
+    for (const m of finishedMatches) {
+      const pred = db.prepare('SELECT * FROM predictions WHERE user_id = ? AND match_id = ?').get(user.id, m.id);
+      if (!pred) continue;
+      if (pred.home_score === m.home_score && pred.away_score === m.away_score) { points += 3; exact++; }
+      else if (Math.sign(pred.home_score - pred.away_score) === Math.sign(m.home_score - m.away_score)) { points += 1; correct++; }
+    }
+    return { user, points, exact, correct };
+  }).sort((a, b) => b.points - a.points);
+
+  const totalFinished = finishedMatches.length;
+  const from = process.env.SMTP_FROM || process.env.SMTP_USER;
+  for (let i = 0; i < ranking.length; i++) {
+    const { user, points, exact, correct } = ranking[i];
+    if (!user.email) continue;
+    const pos = i + 1;
+    const medal = pos === 1 ? '🥇' : pos === 2 ? '🥈' : pos === 3 ? '🥉' : `#${pos}`;
+    const subject = `WK Pool update – ${match.home_team} ${match.home_score}–${match.away_score} ${match.away_team}`;
+    const html = `<div style="font-family:sans-serif;max-width:480px;margin:0 auto"><h2 style="color:#e8a020">🚕 WK Pool 2026 – Update</h2><p>Nieuwe uitslag: <strong>${match.home_team} ${match.home_score}–${match.away_score} ${match.away_team}</strong></p><h3>Jouw positie: ${medal} — ${points} punten</h3><p>Exact goed: ${exact} | Winnaar goed: ${correct} | Gespeeld: ${totalFinished}</p></div>`;
+    try {
+      await mailer.sendMail({ from, to: user.email, subject, html });
+    } catch(e) {
+      console.error(`[Mail] Fout voor ${user.email}:`, e.message);
+    }
+  }
+}
+
+// One-time admin setup: GET /make-admin?secret=...&user=...
+app.get('/make-admin', (req, res) => {
+  const secret = process.env.ADMIN_SECRET || '';
+  if (!secret || req.query.secret !== secret) return res.status(403).send('Verboden');
+  const user = req.query.user;
+  if (!user) return res.status(400).send('Geef ?user=naam op');
+  const result = db.prepare('UPDATE users SET is_admin=1 WHERE name=?').run(user);
+  if (result.changes === 0) return res.status(404).send(`Gebruiker "${user}" niet gevonden`);
+  res.send(`✅ ${user} is nu admin. Log opnieuw in.`);
+});
+
+app.listen(PORT, () => {
+  console.log(`\n🚕 SnelEenTaxi WK Pool draait op http://localhost:${PORT}`);
+  console.log(`👤 Admin account: maak een account aan met naam "${ADMIN_USER}"`);
+  if (!API_KEY) console.log(`⚠️  Geen FOOTBALL_API_KEY ingesteld. Scores handmatig invoeren via admin panel.`);
+});
