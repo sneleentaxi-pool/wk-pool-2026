@@ -3,9 +3,6 @@
   "version": "1.0.0",
   "description": "WK 2026 Pool voor SnelEenTaxi",
   "main": "server.js",
-  "engines": {
-    "node": "18.x"
-  },
   "scripts": {
     "start": "node server.js"
   },
@@ -14,6 +11,10 @@
     "better-sqlite3": "^9.4.3",
     "bcryptjs": "^2.4.3",
     "express-session": "^1.17.3",
-    "node-fetch": "^2.7.0"
+    "node-fetch": "^2.7.0",
+    "nodemailer": "^6.9.9"
+  },
+  "engines": {
+    "node": "18.x"
   }
 }
