@@ -1,0 +1,714 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>WK 2026 Pool – SnelEenTaxi</title>
+<style>
+  :root {
+    --primary: #e8a020;
+    --primary-dark: #c47d0a;
+    --bg: #0d1117;
+    --surface: #161b22;
+    --surface2: #21262d;
+    --border: #30363d;
+    --text: #e6edf3;
+    --text-muted: #8b949e;
+    --green: #3fb950;
+    --red: #f85149;
+    --blue: #58a6ff;
+    --radius: 10px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: 'Segoe UI', system-ui, sans-serif; min-height: 100vh; }
+  
+  /* NAV */
+  nav { background: var(--surface); border-bottom: 1px solid var(--border); padding: 0 20px; display: flex; align-items: center; gap: 0; position: sticky; top: 0; z-index: 100; }
+  .nav-brand { font-size: 1.1rem; font-weight: 700; color: var(--primary); padding: 14px 16px 14px 0; display: flex; align-items: center; gap: 8px; }
+  .nav-tabs { display: flex; flex: 1; overflow-x: auto; }
+  .nav-tab { padding: 14px 16px; cursor: pointer; color: var(--text-muted); border-bottom: 2px solid transparent; white-space: nowrap; font-size: 0.9rem; transition: all .15s; }
+  .nav-tab:hover { color: var(--text); }
+  .nav-tab.active { color: var(--primary); border-bottom-color: var(--primary); }
+  .nav-user { margin-left: auto; display: flex; align-items: center; gap: 10px; padding-left: 16px; }
+  .nav-user span { color: var(--text-muted); font-size: .85rem; }
+  
+  /* LAYOUT */
+  .container { max-width: 1100px; margin: 0 auto; padding: 24px 16px; }
+  .page { display: none; }
+  .page.active { display: block; }
+  
+  /* CARDS */
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px; margin-bottom: 16px; }
+  .card-title { font-size: 1rem; font-weight: 600; margin-bottom: 14px; display: flex; align-items: center; gap: 8px; }
+  
+  /* BUTTONS */
+  .btn { display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px; border: none; border-radius: 6px; cursor: pointer; font-size: 0.875rem; font-weight: 500; transition: all .15s; }
+  .btn-primary { background: var(--primary); color: #000; }
+  .btn-primary:hover { background: var(--primary-dark); }
+  .btn-secondary { background: var(--surface2); color: var(--text); border: 1px solid var(--border); }
+  .btn-secondary:hover { background: var(--border); }
+  .btn-danger { background: var(--red); color: #fff; }
+  .btn-sm { padding: 5px 10px; font-size: 0.8rem; }
+  .btn:disabled { opacity: .5; cursor: not-allowed; }
+  
+  /* FORMS */
+  .form-group { margin-bottom: 14px; }
+  label { display: block; margin-bottom: 5px; font-size: .875rem; color: var(--text-muted); }
+  input[type=text], input[type=password], input[type=number], select {
+    width: 100%; padding: 8px 12px; background: var(--surface2); border: 1px solid var(--border);
+    border-radius: 6px; color: var(--text); font-size: .9rem;
+  }
+  input:focus, select:focus { outline: none; border-color: var(--primary); }
+  
+  /* LOGIN */
+  .auth-wrap { max-width: 380px; margin: 60px auto; }
+  .auth-logo { text-align: center; margin-bottom: 30px; }
+  .auth-logo h1 { font-size: 2rem; color: var(--primary); }
+  .auth-logo p { color: var(--text-muted); margin-top: 4px; }
+  .auth-tabs { display: flex; border-bottom: 1px solid var(--border); margin-bottom: 20px; }
+  .auth-tab { flex: 1; padding: 10px; text-align: center; cursor: pointer; color: var(--text-muted); border-bottom: 2px solid transparent; }
+  .auth-tab.active { color: var(--primary); border-bottom-color: var(--primary); }
+  .error-msg { background: rgba(248,81,73,.15); border: 1px solid var(--red); border-radius: 6px; padding: 10px; margin-bottom: 12px; color: var(--red); font-size: .875rem; display: none; }
+  
+  /* LEADERBOARD */
+  table { width: 100%; border-collapse: collapse; }
+  th, td { padding: 10px 12px; text-align: left; border-bottom: 1px solid var(--border); font-size: .875rem; }
+  th { color: var(--text-muted); font-weight: 500; font-size: .8rem; text-transform: uppercase; }
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: rgba(255,255,255,.03); }
+  .rank-1 { color: #ffd700; font-weight: 700; }
+  .rank-2 { color: #c0c0c0; font-weight: 700; }
+  .rank-3 { color: #cd7f32; font-weight: 700; }
+  .badge { display: inline-block; padding: 2px 8px; border-radius: 20px; font-size: .75rem; font-weight: 600; }
+  .badge-green { background: rgba(63,185,80,.2); color: var(--green); }
+  .badge-yellow { background: rgba(232,160,32,.2); color: var(--primary); }
+  .badge-red { background: rgba(248,81,73,.2); color: var(--red); }
+  
+  /* MATCHES */
+  .match-grid { display: grid; gap: 10px; }
+  .match-card { background: var(--surface2); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px 16px; display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 12px; }
+  .match-team { text-align: center; }
+  .match-team .flag { font-size: 1.5rem; }
+  .match-team .tname { font-size: .85rem; font-weight: 500; margin-top: 2px; }
+  .match-score { display: flex; align-items: center; gap: 8px; }
+  .score-input { width: 44px; padding: 6px; text-align: center; background: var(--surface); border: 1px solid var(--border); border-radius: 6px; color: var(--text); font-size: 1rem; font-weight: 700; }
+  .score-sep { color: var(--text-muted); font-size: 1.1rem; }
+  .match-date { font-size: .75rem; color: var(--text-muted); }
+  .match-group { font-size: .75rem; }
+  .match-saved { color: var(--green); font-size: .75rem; display: none; }
+  .match-finished { background: rgba(63,185,80,.05); border-color: rgba(63,185,80,.3); }
+  .finished-score { font-size: 1.2rem; font-weight: 700; color: var(--text); }
+  .pred-result { font-size: .75rem; }
+  
+  /* GROUPS */
+  .groups-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 14px; }
+  .group-card { background: var(--surface2); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px; }
+  .group-title { font-weight: 600; color: var(--primary); margin-bottom: 10px; font-size: .95rem; }
+  .drag-list { list-style: none; }
+  .drag-item { display: flex; align-items: center; gap: 10px; padding: 8px 10px; margin-bottom: 6px; background: var(--surface); border: 1px solid var(--border); border-radius: 6px; cursor: grab; user-select: none; font-size: .875rem; transition: background .1s; }
+  .drag-item:active { cursor: grabbing; }
+  .drag-item.dragging { opacity: .5; }
+  .drag-item.drag-over { border-color: var(--primary); background: rgba(232,160,32,.1); }
+  .pos-badge { width: 22px; height: 22px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: .75rem; font-weight: 700; flex-shrink: 0; }
+  .pos-1 { background: #ffd700; color: #000; }
+  .pos-2 { background: #c0c0c0; color: #000; }
+  .pos-3 { background: rgba(255,255,255,.15); color: var(--text); }
+  .pos-4 { background: rgba(248,81,73,.2); color: var(--red); }
+  
+  /* STATS */
+  .stats-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; margin-bottom: 20px; }
+  .stat-card { background: var(--surface2); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; text-align: center; }
+  .stat-value { font-size: 1.8rem; font-weight: 700; color: var(--primary); }
+  .stat-label { font-size: .8rem; color: var(--text-muted); margin-top: 2px; }
+  
+  /* TOAST */
+  .toast { position: fixed; bottom: 24px; right: 24px; background: var(--surface2); border: 1px solid var(--border); border-radius: var(--radius); padding: 12px 18px; font-size: .875rem; z-index: 999; transform: translateY(100px); opacity: 0; transition: all .3s; pointer-events: none; }
+  .toast.show { transform: none; opacity: 1; }
+  .toast.success { border-color: var(--green); color: var(--green); }
+  .toast.error { border-color: var(--red); color: var(--red); }
+  
+  /* FILTERS */
+  .filter-bar { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; }
+  .filter-btn { padding: 5px 12px; border: 1px solid var(--border); border-radius: 20px; background: transparent; color: var(--text-muted); cursor: pointer; font-size: .8rem; transition: all .15s; }
+  .filter-btn.active, .filter-btn:hover { background: var(--primary); color: #000; border-color: var(--primary); }
+  
+  /* RESPONSIVE */
+  @media (max-width: 600px) {
+    .match-card { grid-template-columns: 1fr auto 1fr; gap: 6px; padding: 10px; }
+    .match-team .tname { font-size: .75rem; }
+    .stats-grid { grid-template-columns: repeat(2, 1fr); }
+  }
+
+  .section-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
+  .section-header h2 { font-size: 1.1rem; font-weight: 600; }
+  .progress-bar { height: 6px; background: var(--surface2); border-radius: 3px; overflow: hidden; margin-top: 4px; }
+  .progress-fill { height: 100%; background: var(--primary); border-radius: 3px; transition: width .5s; }
+  .my-rank { background: rgba(232,160,32,.1); }
+</style>
+</head>
+<body>
+
+<!-- AUTH -->
+<div id="authPage">
+  <div class="auth-wrap">
+    <div class="auth-logo">
+      <h1>🚕 WK Pool 2026</h1>
+      <p>SnelEenTaxi – Wie wint de pool?</p>
+    </div>
+    <div class="card">
+      <div class="auth-tabs">
+        <div class="auth-tab active" onclick="switchAuthTab('login')">Inloggen</div>
+        <div class="auth-tab" onclick="switchAuthTab('register')">Registreren</div>
+      </div>
+      <div id="authError" class="error-msg"></div>
+      <div id="loginForm">
+        <div class="form-group"><label>Naam</label><input type="text" id="loginName" placeholder="Jouw naam" autocomplete="username"></div>
+        <div class="form-group"><label>Wachtwoord</label><input type="password" id="loginPass" placeholder="Wachtwoord" autocomplete="current-password" onkeydown="if(event.key==='Enter')doLogin()"></div>
+        <button class="btn btn-primary" style="width:100%" onclick="doLogin()">Inloggen</button>
+      </div>
+      <div id="registerForm" style="display:none">
+        <div class="form-group"><label>Naam</label><input type="text" id="regName" placeholder="Jouw naam" autocomplete="username"></div>
+        <div class="form-group"><label>Wachtwoord</label><input type="password" id="regPass" placeholder="Kies een wachtwoord (min 4 tekens)" autocomplete="new-password" onkeydown="if(event.key==='Enter')doRegister()"></div>
+        <button class="btn btn-primary" style="width:100%" onclick="doRegister()">Account aanmaken</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- MAIN APP -->
+<div id="appPage" style="display:none">
+  <nav>
+    <div class="nav-brand">🚕 WK 2026</div>
+    <div class="nav-tabs">
+      <div class="nav-tab active" onclick="showPage('leaderboard')">🏆 Stand</div>
+      <div class="nav-tab" onclick="showPage('matches')">⚽ Wedstrijden</div>
+      <div class="nav-tab" onclick="showPage('groups')">📋 Groepen</div>
+      <div class="nav-tab" onclick="showPage('tournament')">🥇 Toernooi</div>
+      <div class="nav-tab" onclick="showPage('stats')">📊 Stats</div>
+      <div class="nav-tab" id="adminTab" style="display:none" onclick="showPage('admin')">⚙️ Admin</div>
+    </div>
+    <div class="nav-user">
+      <span id="navUserName"></span>
+      <button class="btn btn-secondary btn-sm" onclick="doLogout()">Uitloggen</button>
+    </div>
+  </nav>
+
+  <div class="container">
+
+    <!-- LEADERBOARD -->
+    <div id="page-leaderboard" class="page active">
+      <div class="section-header">
+        <h2>🏆 Tussenstand</h2>
+        <button class="btn btn-secondary btn-sm" onclick="loadLeaderboard()">↻ Vernieuwen</button>
+      </div>
+      <div id="myStats" class="card" style="margin-bottom:16px;display:none"></div>
+      <div class="card" style="padding:0;overflow:hidden">
+        <table id="leaderboardTable">
+          <thead><tr><th#></th><th>Naam</th><th>Punten</th><th>Exact</th><th>Goed</th><th>Winnaar</th><th>Topscorer</th></tr></thead>
+          <tbody id="leaderboardBody"></tbody>
+        </table>
+      </div>
+      <div class="card" style="margin-top:16px">
+        <div class="card-title">📐 Puntensysteem</div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px">
+          <div style="background:var(--surface2);border-radius:6px;padding:12px">
+            <div style="font-size:.75rem;color:var(--text-muted)">Exacte uitslag</div>
+            <div style="font-size:1.4rem;font-weight:700;color:var(--green)">3 punten</div>
+          </div>
+          <div style="background:var(--surface2);border-radius:6px;padding:12px">
+            <div style="font-size:.75rem;color:var(--text-muted)">Goede winnaar/gelijk</div>
+            <div style="font-size:1.4rem;font-weight:700;color:var(--primary)">1 punt</div>
+          </div>
+          <div style="background:var(--surface2);border-radius:6px;padding:12px">
+            <div style="font-size:.75rem;color:var(--text-muted)">Toernooi-winnaar</div>
+            <div style="font-size:1.4rem;font-weight:700;color:var(--blue)">10 punten</div>
+          </div>
+          <div style="background:var(--surface2);border-radius:6px;padding:12px">
+            <div style="font-size:.75rem;color:var(--text-muted)">Topscorer (juist)</div>
+            <div style="font-size:1.4rem;font-weight:700;color:var(--blue)">5 punten</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- MATCHES -->
+    <div id="page-matches" class="page">
+      <div class="section-header">
+        <h2>⚽ Wedstrijden voorspellen</h2>
+      </div>
+      <div class="filter-bar" id="groupFilter"></div>
+      <div id="matchesContainer" class="match-grid"></div>
+    </div>
+
+    <!-- GROUPS -->
+    <div id="page-groups" class="page">
+      <div class="section-header">
+        <h2>📋 Groepsranking voorspellen</h2>
+        <button class="btn btn-primary btn-sm" onclick="saveAllGroups()">💾 Alles opslaan</button>
+      </div>
+      <p style="color:var(--text-muted);font-size:.875rem;margin-bottom:16px">Sleep de teams in de volgorde die jij verwacht. De top 2 per groep gaan door naar de knock-outfase.</p>
+      <div class="groups-grid" id="groupsContainer"></div>
+    </div>
+
+    <!-- TOURNAMENT -->
+    <div id="page-tournament" class="page">
+      <div class="section-header"><h2>🥇 Toernooi voorspellingen</h2></div>
+      <div class="card">
+        <div class="card-title">🏆 Wie wint het WK 2026?</div>
+        <div class="form-group">
+          <select id="winnerSelect"><option value="">-- Kies een land --</option></select>
+        </div>
+        <div class="card-title" style="margin-top:20px">⚽ Topscorer</div>
+        <div class="form-group">
+          <input type="text" id="topScorerInput" placeholder="Naam van de topscorer (bijv. Mbappe)">
+        </div>
+        <button class="btn btn-primary" onclick="saveTournament()">💾 Opslaan</button>
+      </div>
+      <div class="card" id="allTournamentPreds">
+        <div class="card-title">👀 Wat voorspellen anderen?</div>
+        <div id="tournamentPredsList">Laadt...</div>
+      </div>
+    </div>
+
+    <!-- STATS -->
+    <div id="page-stats" class="page">
+      <div class="section-header"><h2>📊 Statistieken</h2></div>
+      <div class="stats-grid" id="statsGrid"></div>
+      <div class="card">
+        <div class="card-title">🔥 Populairste winnaar-voorspellingen</div>
+        <div id="popularWinners"></div>
+      </div>
+      <div class="card" style="margin-top:14px">
+        <div class="card-title">📈 Meeste voorspellingen ingevuld</div>
+        <table>
+          <thead><tr><th>Naam</th><th>Ingevuld</th><th>Voortgang</th></tr></thead>
+          <tbody id="completionTable"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- ADMIN -->
+    <div id="page-admin" class="page">
+      <div class="section-header"><h2>⚙️ Admin Panel</h2></div>
+      <div class="card">
+        <div class="card-title">⚽ Wedstrijduitslagen invoeren</div>
+        <div id="adminMatchList">Laadt...</div>
+      </div>
+      <div class="card" style="margin-top:14px">
+        <div class="card-title">👥 Gebruikers</div>
+        <table>
+          <thead><tr><th>Naam</th><th>Aangemeld</th><th>Admin</th><th></th></tr></thead>
+          <tbody id="adminUsersTable"></tbody>
+        </table>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+let currentUser = null;
+let allMatches = [];
+let myPredictions = {};
+let groups = {};
+let activeGroupFilter = 'ALL';
+
+// ---- INIT ----
+async function init() {
+  const me = await api('/api/me');
+  if (me.loggedIn) {
+    currentUser = me;
+    showApp();
+  } else {
+    document.getElementById('authPage').style.display = '';
+  }
+}
+
+function showApp() {
+  document.getElementById('authPage').style.display = 'none';
+  document.getElementById('appPage').style.display = '';
+  document.getElementById('navUserName').textContent = currentUser.name;
+  if (currentUser.isAdmin) document.getElementById('adminTab').style.display = '';
+  loadLeaderboard();
+}
+
+// ---- AUTH ----
+function switchAuthTab(tab) {
+  document.querySelectorAll('.auth-tab').forEach((t,i) => t.classList.toggle('active', (i===0&&tab==='login')||(i===1&&tab==='register')));
+  document.getElementById('loginForm').style.display = tab === 'login' ? '' : 'none';
+  document.getElementById('registerForm').style.display = tab === 'register' ? '' : 'none';
+  document.getElementById('authError').style.display = 'none';
+}
+
+async function doLogin() {
+  const name = document.getElementById('loginName').value.trim();
+  const password = document.getElementById('loginPass').value;
+  const r = await api('/api/login', { method:'POST', body:{name,password} });
+  if (r.error) { showAuthError(r.error); return; }
+  currentUser = r;
+  showApp();
+}
+
+async function doRegister() {
+  const name = document.getElementById('regName').value.trim();
+  const password = document.getElementById('regPass').value;
+  const r = await api('/api/register', { method:'POST', body:{name,password} });
+  if (r.error) { showAuthError(r.error); return; }
+  currentUser = r;
+  showApp();
+}
+
+async function doLogout() {
+  await api('/api/logout', { method:'POST' });
+  currentUser = null;
+  location.reload();
+}
+
+function showAuthError(msg) {
+  const el = document.getElementById('authError');
+  el.textContent = msg;
+  el.style.display = '';
+}
+
+// ---- NAV ----
+function showPage(page) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
+  document.getElementById('page-' + page).classList.add('active');
+  event.target.classList.add('active');
+  if (page === 'matches') loadMatches();
+  if (page === 'groups') loadGroups();
+  if (page === 'tournament') loadTournament();
+  if (page === 'stats') loadStats();
+  if (page === 'admin') loadAdmin();
+  if (page === 'leaderboard') loadLeaderboard();
+}
+
+// ---- LEADERBOARD ----
+async function loadLeaderboard() {
+  const data = await api('/api/leaderboard');
+  if (!Array.isArray(data)) return;
+  const tbody = document.getElementById('leaderboardBody');
+  tbody.innerHTML = '';
+  const myIdx = data.findIndex(u => u.name === currentUser.name);
+  
+  // My stats
+  if (myIdx >= 0) {
+    const me = data[myIdx];
+    document.getElementById('myStats').style.display = '';
+    document.getElementById('myStats').innerHTML = `
+      <div style="display:flex;gap:20px;flex-wrap:wrap;align-items:center">
+        <div><div style="font-size:.75rem;color:var(--text-muted)">Jouw positie</div><div style="font-size:1.6rem;font-weight:700;color:var(--primary)">#${myIdx+1}</div></div>
+        <div><div style="font-size:.75rem;color:var(--text-muted)">Punten</div><div style="font-size:1.6rem;font-weight:700">${me.points}</div></div>
+        <div><div style="font-size:.75rem;color:var(--text-muted)">Exact goed</div><div style="font-size:1.6rem;font-weight:700;color:var(--green)">${me.exactCount}</div></div>
+        <div><div style="font-size:.75rem;color:var(--text-muted)">Winnaar goed</div><div style="font-size:1.6rem;font-weight:700;color:var(--primary)">${me.winner || '—'}</div></div>
+      </div>`;
+  }
+
+  data.forEach((u, i) => {
+    const tr = document.createElement('tr');
+    if (u.name === currentUser.name) tr.className = 'my-rank';
+    const rankClass = i===0?'rank-1':i===1?'rank-2':i===2?'rank-3':'';
+    const medal = i===0?'🥇':i===1?'🥈':i===2?'🥉':'';
+    tr.innerHTML = `
+      <td class="${rankClass}">${medal} ${i+1}</td>
+      <td><strong>${u.name}</strong></td>
+      <td><strong style="color:var(--primary)">${u.points}</strong></td>
+      <td><span class="badge badge-green">${u.exactCount}</span></td>
+      <td>${u.correctCount}</td>
+      <td style="font-size:.8rem">${u.winner||'—'}</td>
+      <td style="font-size:.8rem">${u.topScorer||'—'}</td>`;
+    tbody.appendChild(tr);
+  });
+}
+
+// ---- MATCHES ----
+async function loadMatches() {
+  if (allMatches.length === 0) {
+    allMatches = await api('/api/matches');
+  }
+  const pData = await api('/api/predictions');
+  myPredictions = {};
+  (pData.matchPredictions || []).forEach(p => myPredictions[p.match_id] = p);
+
+  // Build group filter
+  const grps = [...new Set(allMatches.map(m => m.group_name))].sort();
+  const filterBar = document.getElementById('groupFilter');
+  if (!filterBar.children.length) {
+    ['ALL', ...grps].forEach(g => {
+      const btn = document.createElement('button');
+      btn.className = 'filter-btn' + (g === 'ALL' ? ' active' : '');
+      btn.textContent = g === 'ALL' ? 'Alle groepen' : 'Groep ' + g;
+      btn.onclick = () => { activeGroupFilter = g; document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active')); btn.classList.add('active'); renderMatches(); };
+      filterBar.appendChild(btn);
+    });
+  }
+  renderMatches();
+}
+
+function renderMatches() {
+  const container = document.getElementById('matchesContainer');
+  container.innerHTML = '';
+  const visible = activeGroupFilter === 'ALL' ? allMatches : allMatches.filter(m => m.group_name === activeGroupFilter);
+  
+  visible.forEach(match => {
+    const pred = myPredictions[match.id] || {};
+    const isFinished = match.status === 'FINISHED';
+    const div = document.createElement('div');
+    div.className = 'match-card' + (isFinished ? ' match-finished' : '');
+    
+    let scoreHtml;
+    if (isFinished) {
+      const actualResult = Math.sign(match.home_score - match.away_score);
+      const predResult = pred.home_score !== undefined ? Math.sign(pred.home_score - pred.away_score) : null;
+      const exact = pred.home_score === match.home_score && pred.away_score === match.away_score;
+      const correct = predResult !== null && actualResult === predResult;
+      const resultBadge = exact ? '<span class="badge badge-green">+3</span>' : correct ? '<span class="badge badge-yellow">+1</span>' : predResult !== null ? '<span class="badge badge-red">0</span>' : '';
+      scoreHtml = `<div style="text-align:center">
+        <div class="finished-score">${match.home_score} – ${match.away_score}</div>
+        <div style="font-size:.75rem;color:var(--text-muted);margin-top:2px">Uitslag</div>
+        ${pred.home_score !== undefined ? `<div style="font-size:.75rem;color:var(--text-muted)">Jouw pred: ${pred.home_score}–${pred.away_score} ${resultBadge}</div>` : ''}
+      </div>`;
+    } else {
+      scoreHtml = `<div style="display:flex;align-items:center;gap:6px;flex-direction:column">
+        <div style="display:flex;align-items:center;gap:6px">
+          <input class="score-input" type="number" min="0" max="20" value="${pred.home_score??''}" placeholder="0" id="h${match.id}" onchange="savePred(${match.id})">
+          <span class="score-sep">–</span>
+          <input class="score-input" type="number" min="0" max="20" value="${pred.away_score??''}" placeholder="0" id="a${match.id}" onchange="savePred(${match.id})">
+        </div>
+        <span class="match-saved" id="saved${match.id}">✓ Opgeslagen</span>
+      </div>`;
+    }
+    
+    div.innerHTML = `
+      <div class="match-team">
+        <div class="flag">${teamFlag(match.home_team)}</div>
+        <div class="tname">${match.home_team}</div>
+      </div>
+      ${scoreHtml}
+      <div class="match-team">
+        <div class="flag">${teamFlag(match.away_team)}</div>
+        <div class="tname">${match.away_team}</div>
+      </div>`;
+    
+    container.appendChild(div);
+
+    // Date label
+    const dateDiv = document.createElement('div');
+    dateDiv.style.cssText = 'text-align:center;font-size:.75rem;color:var(--text-muted);margin-top:-6px;margin-bottom:4px';
+    dateDiv.textContent = `Groep ${match.group_name} • ${formatDate(match.match_date)}`;
+    container.insertBefore(dateDiv, div.nextSibling);
+  });
+}
+
+async function savePred(matchId) {
+  const h = parseInt(document.getElementById('h'+matchId)?.value);
+  const a = parseInt(document.getElementById('a'+matchId)?.value);
+  if (isNaN(h) || isNaN(a)) return;
+  const r = await api('/api/predictions/match', { method:'POST', body:{matchId, homeScore:h, awayScore:a} });
+  if (r.success) {
+    const el = document.getElementById('saved'+matchId);
+    if (el) { el.style.display=''; setTimeout(()=>el.style.display='none', 2000); }
+  }
+}
+
+// ---- GROUPS ----
+async function loadGroups() {
+  if (!Object.keys(groups).length) groups = await api('/api/groups');
+  const pData = await api('/api/predictions');
+  const gPreds = {};
+  (pData.groupPredictions || []).forEach(p => {
+    if (!gPreds[p.group_name]) gPreds[p.group_name] = [];
+    gPreds[p.group_name][p.position - 1] = p.team;
+  });
+  
+  const container = document.getElementById('groupsContainer');
+  container.innerHTML = '';
+  
+  for (const [grp, teams] of Object.entries(groups)) {
+    const savedOrder = gPreds[grp] || teams;
+    const ordered = savedOrder.length === 4 ? savedOrder : teams;
+    
+    const card = document.createElement('div');
+    card.className = 'group-card';
+    card.innerHTML = `<div class="group-title">Groep ${grp}</div><ul class="drag-list" id="dragList${grp}" data-group="${grp}"></ul>`;
+    
+    const list = card.querySelector('ul');
+    ordered.forEach((team, i) => {
+      const li = document.createElement('li');
+      li.className = 'drag-item';
+      li.draggable = true;
+      li.dataset.team = team;
+      li.innerHTML = `<span class="pos-badge pos-${i+1}">${i+1}</span> ${teamFlag(team)} ${team}`;
+      addDragEvents(li, list);
+      list.appendChild(li);
+    });
+    container.appendChild(card);
+  }
+}
+
+function addDragEvents(item, list) {
+  item.addEventListener('dragstart', () => { item.classList.add('dragging'); });
+  item.addEventListener('dragend', () => { item.classList.remove('dragging'); updatePositions(list); });
+  item.addEventListener('dragover', e => { e.preventDefault(); const dragging = list.querySelector('.dragging'); if (dragging && dragging !== item) { const rect = item.getBoundingClientRect(); const mid = rect.top + rect.height/2; list.insertBefore(dragging, e.clientY < mid ? item : item.nextSibling); } });
+}
+
+function updatePositions(list) {
+  list.querySelectorAll('.drag-item').forEach((li, i) => {
+    const badge = li.querySelector('.pos-badge');
+    badge.className = `pos-badge pos-${i+1}`;
+    badge.textContent = i+1;
+  });
+}
+
+async function saveAllGroups() {
+  for (const grp of Object.keys(groups)) {
+    const list = document.getElementById('dragList'+grp);
+    const ranking = [...list.querySelectorAll('.drag-item')].map(li => li.dataset.team);
+    await api('/api/predictions/group', { method:'POST', body:{groupName:grp, ranking} });
+  }
+  showToast('Groepsrankings opgeslagen!', 'success');
+}
+
+// ---- TOURNAMENT ----
+async function loadTournament() {
+  if (!Object.keys(groups).length) groups = await api('/api/groups');
+  const allTeams = Object.values(groups).flat().sort();
+  const sel = document.getElementById('winnerSelect');
+  if (sel.children.length === 1) {
+    allTeams.forEach(t => { const o = document.createElement('option'); o.value=t; o.textContent=`${teamFlag(t)} ${t}`; sel.appendChild(o); });
+  }
+  const pData = await api('/api/predictions');
+  const tp = pData.tournamentPrediction || {};
+  if (tp.winner) sel.value = tp.winner;
+  if (tp.top_scorer) document.getElementById('topScorerInput').value = tp.top_scorer;
+  
+  // Show all predictions
+  const board = await api('/api/leaderboard');
+  const listEl = document.getElementById('tournamentPredsList');
+  if (Array.isArray(board)) {
+    listEl.innerHTML = board.filter(u => u.winner).map(u => `
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border)">
+        <strong>${u.name}</strong>
+        <span>${teamFlag(u.winner)} ${u.winner}</span>
+      </div>`).join('') || '<p style="color:var(--text-muted);font-size:.875rem">Nog niemand ingevuld</p>';
+  }
+}
+
+async function saveTournament() {
+  const winner = document.getElementById('winnerSelect').value;
+  const topScorer = document.getElementById('topScorerInput').value.trim();
+  if (!winner) { showToast('Kies een winnaar', 'error'); return; }
+  const r = await api('/api/predictions/tournament', { method:'POST', body:{winner, topScorer} });
+  if (r.success) showToast('Toernooi-voorspelling opgeslagen!', 'success');
+}
+
+// ---- STATS ----
+async function loadStats() {
+  const board = await api('/api/leaderboard');
+  if (!Array.isArray(board)) return;
+  const totalPreds = board.reduce((s,u) => s+u.predCount, 0);
+  const totalExact = board.reduce((s,u) => s+u.exactCount, 0);
+  const totalPoints = board.reduce((s,u) => s+u.points, 0);
+  
+  document.getElementById('statsGrid').innerHTML = `
+    <div class="stat-card"><div class="stat-value">${board.length}</div><div class="stat-label">Deelnemers</div></div>
+    <div class="stat-card"><div class="stat-value">${totalPreds}</div><div class="stat-label">Totaal voorspellingen</div></div>
+    <div class="stat-card"><div class="stat-value">${totalExact}</div><div class="stat-label">Exacte uitslagen</div></div>
+    <div class="stat-card"><div class="stat-value">${totalPoints}</div><div class="stat-label">Totaal punten</div></div>`;
+  
+  // Popular winners
+  const winnerCount = {};
+  board.forEach(u => { if (u.winner) winnerCount[u.winner] = (winnerCount[u.winner]||0)+1; });
+  const sorted = Object.entries(winnerCount).sort((a,b) => b[1]-a[1]);
+  document.getElementById('popularWinners').innerHTML = sorted.map(([team, count]) => `
+    <div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border)">
+      <span style="font-size:1.2rem">${teamFlag(team)}</span>
+      <span style="flex:1">${team}</span>
+      <div style="flex:2"><div class="progress-bar"><div class="progress-fill" style="width:${Math.round(count/board.length*100)}%"></div></div></div>
+      <span style="font-size:.8rem;color:var(--text-muted)">${count}x</span>
+    </div>`).join('') || '<p style="color:var(--text-muted);font-size:.875rem">Nog geen voorspellingen</p>';
+  
+  // Completion
+  const tbody = document.getElementById('completionTable');
+  const matchCount = allMatches.length || 72;
+  tbody.innerHTML = board.sort((a,b)=>b.predCount-a.predCount).map(u => `
+    <tr>
+      <td>${u.name}</td>
+      <td>${u.predCount}/${matchCount}</td>
+      <td style="width:120px"><div class="progress-bar"><div class="progress-fill" style="width:${Math.round(u.predCount/matchCount*100)}%"></div></div></td>
+    </tr>`).join('');
+}
+
+// ---- ADMIN ----
+async function loadAdmin() {
+  const matches = await api('/api/matches');
+  const users = await api('/api/admin/users');
+  
+  const container = document.getElementById('adminMatchList');
+  container.innerHTML = matches.filter(m => m.status !== 'FINISHED').slice(0, 20).map(m => `
+    <div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border);flex-wrap:wrap">
+      <span style="flex:1;font-size:.875rem">${m.home_team} vs ${m.away_team} <span style="color:var(--text-muted)">(Gr.${m.group_name})</span></span>
+      <input type="number" min="0" max="20" placeholder="Thuis" style="width:60px;padding:5px;background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--text)" id="ah${m.id}">
+      <span>–</span>
+      <input type="number" min="0" max="20" placeholder="Uit" style="width:60px;padding:5px;background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--text)" id="aa${m.id}">
+      <button class="btn btn-sm btn-primary" onclick="adminScore(${m.id})">✓</button>
+    </div>`).join('') || '<p style="color:var(--text-muted);font-size:.875rem">Alle wedstrijden al ingevoerd</p>';
+  
+  const tbody = document.getElementById('adminUsersTable');
+  tbody.innerHTML = users.map(u => `<tr>
+    <td>${u.name}</td>
+    <td style="font-size:.8rem;color:var(--text-muted)">${u.created_at?.split('T')[0]||''}</td>
+    <td>${u.is_admin ? '✅ Ja' : '—'}</td>
+    <td>${!u.is_admin ? `<button class="btn btn-danger btn-sm" onclick="adminDeleteUser(${u.id},'${u.name}')">Verwijderen</button>` : ''}</td>
+  </tr>`).join('');
+}
+
+async function adminScore(matchId) {
+  const h = parseInt(document.getElementById('ah'+matchId)?.value);
+  const a = parseInt(document.getElementById('aa'+matchId)?.value);
+  if (isNaN(h) || isNaN(a)) { showToast('Voer beide scores in', 'error'); return; }
+  const r = await api('/api/admin/score', { method:'POST', body:{matchId, homeScore:h, awayScore:a} });
+  if (r.success) { showToast('Uitslag opgeslagen!', 'success'); loadAdmin(); allMatches = []; }
+}
+
+async function adminDeleteUser(id, name) {
+  if (!confirm(`Verwijder ${name}?`)) return;
+  await api(`/api/admin/user/${id}`, { method:'DELETE' });
+  loadAdmin();
+}
+
+// ---- HELPERS ----
+async function api(url, opts = {}) {
+  const r = await fetch(url, {
+    method: opts.method || 'GET',
+    headers: { 'Content-Type': 'application/json' },
+    body: opts.body ? JSON.stringify(opts.body) : undefined
+  });
+  return r.json();
+}
+
+function showToast(msg, type='success') {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'toast show ' + type;
+  setTimeout(() => t.className = 'toast', 2500);
+}
+
+function formatDate(d) {
+  if (!d) return '';
+  const date = new Date(d);
+  return date.toLocaleDateString('nl-NL', { day:'numeric', month:'short' });
+}
+
+const FLAGS = {
+  'Mexico':'🇲🇽','USA':'🇺🇸','Canada':'🇨🇦','Ecuador':'🇪🇨','Spain':'🇪🇸','France':'🇫🇷','Morocco':'🇲🇦','Algeria':'🇩🇿','Brazil':'🇧🇷','Argentina':'🇦🇷','Colombia':'🇨🇴','Uruguay':'🇺🇾','Germany':'🇩🇪','Netherlands':'🇳🇱','Belgium':'🇧🇪','Denmark':'🇩🇰','England':'🏴󠁧󠁢󠁥󠁮󠁧󠁿','Portugal':'🇵🇹','Poland':'🇵🇱','Croatia':'🇭🇷','Japan':'🇯🇵','South Korea':'🇰🇷','Australia':'🇦🇺','Iran':'🇮🇷','Senegal':'🇸🇳','Nigeria':'🇳🇬','Egypt':'🇪🇬','Tunisia':'🇹🇳','Saudi Arabia':'🇸🇦','Qatar':'🇶🇦','UAE':'🇦🇪','Iraq':'🇮🇶','Serbia':'🇷🇸','Switzerland':'🇨🇭','Austria':'🇦🇹','Czech Republic':'🇨🇿','Chile':'🇨🇱','Peru':'🇵🇪','Bolivia':'🇧🇴','Venezuela':'🇻🇪','Turkey':'🇹🇷','Greece':'🇬🇷','Romania':'🇷🇴','Slovakia':'🇸🇰','Ivory Coast':'🇨🇮','DR Congo':'🇨🇩','Cameroon':'🇨🇲','Ghana':'🇬🇭'
+};
+function teamFlag(t) { return FLAGS[t] || '🏳️'; }
+
+init();
+</script>
+</body>
+</html>
