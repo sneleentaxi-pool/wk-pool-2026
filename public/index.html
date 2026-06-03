@@ -168,7 +168,9 @@
       </div>
       <div id="registerForm" style="display:none">
         <div class="form-group"><label>Naam</label><input type="text" id="regName" placeholder="Jouw naam" autocomplete="username"></div>
+        <div class="form-group"><label>E-mailadres</label><input type="email" id="regEmail" placeholder="jouw@email.nl" autocomplete="email"></div>
         <div class="form-group"><label>Wachtwoord</label><input type="password" id="regPass" placeholder="Kies een wachtwoord (min 4 tekens)" autocomplete="new-password" onkeydown="if(event.key==='Enter')doRegister()"></div>
+        <p style="font-size:.78rem;color:var(--text-muted);margin-bottom:12px">📧 Je ontvangt na elke wedstrijd een e-mail met je actuele ranking.</p>
         <button class="btn btn-primary" style="width:100%" onclick="doRegister()">Account aanmaken</button>
       </div>
     </div>
@@ -192,6 +194,9 @@
       <button class="btn btn-secondary btn-sm" onclick="doLogout()">Uitloggen</button>
     </div>
   </nav>
+
+  <!-- DEADLINE BANNER -->
+  <div id="deadlineBanner" style="display:none;padding:10px 20px;text-align:center;font-size:.875rem;font-weight:500"></div>
 
   <div class="container">
 
@@ -319,6 +324,8 @@ let allMatches = [];
 let myPredictions = {};
 let groups = {};
 let activeGroupFilter = 'ALL';
+let deadlineLocked = false;
+let deadlineDate = null;
 
 // ---- INIT ----
 async function init() {
@@ -331,11 +338,37 @@ async function init() {
   }
 }
 
+async function checkDeadline() {
+  const d = await api('/api/deadline');
+  deadlineLocked = d.locked;
+  deadlineDate = new Date(d.deadline);
+  const banner = document.getElementById('deadlineBanner');
+  if (d.locked) {
+    banner.style.display = '';
+    banner.style.background = 'rgba(248,81,73,.15)';
+    banner.style.borderBottom = '1px solid rgba(248,81,73,.4)';
+    banner.style.color = '#f85149';
+    banner.innerHTML = '🔒 Deadline verstreken – voorspellingen zijn gesloten. Het toernooi is begonnen!';
+  } else {
+    const diff = deadlineDate - new Date();
+    const days = Math.floor(diff / 86400000);
+    const hours = Math.floor((diff % 86400000) / 3600000);
+    banner.style.display = '';
+    banner.style.background = 'rgba(232,160,32,.1)';
+    banner.style.borderBottom = '1px solid rgba(232,160,32,.3)';
+    banner.style.color = 'var(--primary)';
+    banner.innerHTML = `⏰ Deadline: <strong>${deadlineDate.toLocaleDateString('nl-NL',{weekday:'long',day:'numeric',month:'long'})} 23:59</strong> — nog ${days > 0 ? days+'d ' : ''}${hours}u om te voorspellen`;
+    // Refresh every minute
+    setTimeout(checkDeadline, 60000);
+  }
+}
+
 function showApp() {
   document.getElementById('authPage').style.display = 'none';
   document.getElementById('appPage').style.display = '';
   document.getElementById('navUserName').textContent = currentUser.name;
   if (currentUser.isAdmin) document.getElementById('adminTab').style.display = '';
+  checkDeadline();
   loadLeaderboard();
 }
 
@@ -358,8 +391,9 @@ async function doLogin() {
 
 async function doRegister() {
   const name = document.getElementById('regName').value.trim();
+  const email = document.getElementById('regEmail').value.trim();
   const password = document.getElementById('regPass').value;
-  const r = await api('/api/register', { method:'POST', body:{name,password} });
+  const r = await api('/api/register', { method:'POST', body:{name,email,password} });
   if (r.error) { showAuthError(r.error); return; }
   currentUser = r;
   showApp();
@@ -476,6 +510,14 @@ function renderMatches() {
         <div style="font-size:.75rem;color:var(--text-muted);margin-top:2px">Uitslag</div>
         ${pred.home_score !== undefined ? `<div style="font-size:.75rem;color:var(--text-muted)">Jouw pred: ${pred.home_score}–${pred.away_score} ${resultBadge}</div>` : ''}
       </div>`;
+    } else if (deadlineLocked) {
+      const hp = pred.home_score !== undefined ? pred.home_score : '–';
+      const ap = pred.away_score !== undefined ? pred.away_score : '–';
+      const hasPred = pred.home_score !== undefined;
+      scoreHtml = `<div style="text-align:center">
+        <div style="font-size:1rem;font-weight:600;color:${hasPred?'var(--text)':'var(--text-muted)'}">${hp} – ${ap}</div>
+        <div style="font-size:.7rem;color:var(--text-muted);margin-top:2px">${hasPred ? 'Jouw voorsp.' : '🔒 Niet ingevuld'}</div>
+      </div>`;
     } else {
       scoreHtml = `<div style="display:flex;align-items:center;gap:6px;flex-direction:column">
         <div style="display:flex;align-items:center;gap:6px">
@@ -569,6 +611,7 @@ function updatePositions(list) {
 }
 
 async function saveAllGroups() {
+  if (deadlineLocked) { showToast('Deadline verstreken – niet meer mogelijk', 'error'); return; }
   for (const grp of Object.keys(groups)) {
     const list = document.getElementById('dragList'+grp);
     const ranking = [...list.querySelectorAll('.drag-item')].map(li => li.dataset.team);
@@ -603,6 +646,7 @@ async function loadTournament() {
 }
 
 async function saveTournament() {
+  if (deadlineLocked) { showToast('Deadline verstreken – niet meer mogelijk', 'error'); return; }
   const winner = document.getElementById('winnerSelect').value;
   const topScorer = document.getElementById('topScorerInput').value.trim();
   if (!winner) { showToast('Kies een winnaar', 'error'); return; }
@@ -668,39 +712,4 @@ function renderAdminMatches() {
 
   container.innerHTML = filtered.map(m => {
     const isFinished = m.status === 'FINISHED';
-    return `<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border);flex-wrap:wrap">
-      <span style="flex:1;font-size:.875rem">
-        ${isFinished ? `<span style="color:var(--green);font-size:.7rem">✅ GESPEELD</span> ` : ''}
-        <strong>${m.home_team}</strong> vs <strong>${m.away_team}</strong>
-        <span style="color:var(--text-muted);font-size:.75rem"> (Gr.${m.group_name})</span>
-        ${isFinished ? `<span style="color:var(--text-muted);font-size:.75rem"> | Uitslag: ${m.home_score}–${m.away_score}</span>` : ''}
-      </span>
-      <input type="number" min="0" max="20" placeholder="${isFinished ? m.home_score : 'Thuis'}" style="width:60px;padding:5px;background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--text)" id="ah${m.id}">
-      <span>–</span>
-      <input type="number" min="0" max="20" placeholder="${isFinished ? m.away_score : 'Uit'}" style="width:60px;padding:5px;background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--text)" id="aa${m.id}">
-      <button class="btn btn-sm btn-primary" onclick="adminScore(${m.id})" title="Uitslag opslaan">✓</button>
-      ${isFinished ? `<button class="btn btn-sm btn-danger" onclick="adminReset(${m.id})" title="Reset uitslag">↺</button>` : ''}
-    </div>`;
-  }).join('') || '<p style="color:var(--text-muted);font-size:.875rem">Geen wedstrijden gevonden.</p>';
-}
-
-async function loadAdmin() {
-  const [matches, users] = await Promise.all([api('/api/matches'), api('/api/admin/users')]);
-  adminAllMatches = matches;
-  setAdminFilter(adminFilter);
-
-  const tbody = document.getElementById('adminUsersTable');
-  tbody.innerHTML = users.map(u => `<tr>
-    <td>${u.name}</td>
-    <td style="font-size:.8rem;color:var(--text-muted)">${u.created_at?.split('T')[0]||''}</td>
-    <td>${u.is_admin ? '✅ Ja' : '—'}</td>
-    <td>${!u.is_admin ? `<button class="btn btn-danger btn-sm" onclick="adminDeleteUser(${u.id},'${u.name}')">Verwijderen</button>` : ''}</td>
-  </tr>`).join('');
-}
-
-async function adminScore(matchId) {
-  const h = parseInt(document.getElementById('ah'+matchId)?.value);
-  const a = parseInt(document.getElementById('aa'+matchId)?.value);
-  if (isNaN(h) || isNaN(a)) { showToast('Voer beide scores in', 'error'); return; }
-  const r = await api('/api/admin/score', { method:'POST', body:{matchId, homeScore:h, awayScore:a} });
-  if (r.success) { showToast('Uitslag opgeslagen!', 'success'); adminAllMatches = []; 
+    return `<di
