@@ -282,29 +282,54 @@ app.get('/api/leaderboard', requireAuth, (req, res) => {
 
 
 // ---- FETCH LIVE DATA ----
+// Name mapping: football-data.org name -> our app name
+const TEAM_NAME_MAP = {
+  'Mexico': 'Mexico', 'United States': 'USA', 'Canada': 'Canada', 'Ecuador': 'Ecuador',
+  'Spain': 'Spain', 'France': 'France', 'Morocco': 'Morocco', 'Algeria': 'Algeria',
+  'Brazil': 'Brazil', 'Argentina': 'Argentina', 'Colombia': 'Colombia', 'Uruguay': 'Uruguay',
+  'Germany': 'Germany', 'Netherlands': 'Netherlands', 'Belgium': 'Belgium', 'Denmark': 'Denmark',
+  'England': 'England', 'Portugal': 'Portugal', 'Poland': 'Poland', 'Croatia': 'Croatia',
+  'Japan': 'Japan', 'South Korea': 'South Korea', 'Australia': 'Australia', 'IR Iran': 'Iran',
+  'Senegal': 'Senegal', 'Nigeria': 'Nigeria', 'Egypt': 'Egypt', 'Tunisia': 'Tunisia',
+  'Saudi Arabia': 'Saudi Arabia', 'Qatar': 'Qatar', 'United Arab Emirates': 'UAE', 'Iraq': 'Iraq',
+  'Serbia': 'Serbia', 'Switzerland': 'Switzerland', 'Austria': 'Austria', 'Czech Republic': 'Czech Republic',
+  'Chile': 'Chile', 'Peru': 'Peru', 'Bolivia': 'Bolivia', 'Venezuela': 'Venezuela',
+  'Turkey': 'Turkey', 'Greece': 'Greece', 'Romania': 'Romania', 'Slovakia': 'Slovakia',
+  "Côte d'Ivoire": 'Ivory Coast', 'DR Congo': 'DR Congo', 'Cameroon': 'Cameroon', 'Ghana': 'Ghana'
+};
+
 async function fetchLiveScores() {
-  if (!API_KEY) return;
   try {
-    const resp = await fetch('https://api.football-data.org/v4/competitions/WC/matches?season=2026', {
-      headers: { 'X-Auth-Token': API_KEY }
-    });
-    if (!resp.ok) return;
-    const data = await resp.json();
-    const update = db.prepare(`UPDATE matches SET home_score=?, away_score=?, status=?, updated_at=datetime('now') WHERE id=?`);
-    for (const m of (data.matches || [])) {
-      const score = m.score?.fullTime;
-      if (score) update.run(score.home, score.away, m.status, m.id);
+    const headers = API_KEY ? { 'X-Auth-Token': API_KEY } : {};
+    const resp = await fetch('https://api.football-data.org/v4/competitions/WC/matches?season=2026', { headers });
+    if (!resp.ok) {
+      console.log('[Live] API response niet ok:', resp.status);
+      return;
     }
-    console.log('[Live] Scores bijgewerkt');
+    const data = await resp.json();
+    const matches = data.matches || [];
+    let updated = 0;
+    const updateStmt = db.prepare(`UPDATE matches SET home_score=?, away_score=?, status='FINISHED', updated_at=datetime('now') WHERE LOWER(home_team)=LOWER(?) AND LOWER(away_team)=LOWER(?)`);
+    for (const m of matches) {
+      if (m.status !== 'FINISHED') continue;
+      const score = m.score?.fullTime;
+      if (score?.home == null || score?.away == null) continue;
+      const home = TEAM_NAME_MAP[m.homeTeam?.name] || m.homeTeam?.name;
+      const away = TEAM_NAME_MAP[m.awayTeam?.name] || m.awayTeam?.name;
+      if (!home || !away) continue;
+      const result = updateStmt.run(score.home, score.away, home, away);
+      if (result.changes > 0) updated++;
+    }
+    if (updated > 0) console.log(`[Live] ${updated} scores bijgewerkt`);
+    else console.log(`[Live] Geen nieuwe scores (${matches.length} wedstrijden opgehaald)`);
   } catch(e) {
     console.error('[Live] Fout bij ophalen scores:', e.message);
   }
 }
 
-if (API_KEY) {
-  fetchLiveScores();
-  setInterval(fetchLiveScores, 5 * 60 * 1000);
-}
+// Altijd starten, ook zonder API key (free tier werkt zonder key)
+fetchLiveScores();
+setInterval(fetchLiveScores, 5 * 60 * 1000);
 
 // ---- ADMIN ----
 app.get('/api/admin/users', requireAuth, requireAdmin, (req, res) => {
@@ -353,35 +378,4 @@ async function sendRankingEmails(matchId) {
   }).sort((a, b) => b.points - a.points);
 
   const totalFinished = finishedMatches.length;
-  const from = process.env.SMTP_FROM || process.env.SMTP_USER;
-  for (let i = 0; i < ranking.length; i++) {
-    const { user, points, exact, correct } = ranking[i];
-    if (!user.email) continue;
-    const pos = i + 1;
-    const medal = pos === 1 ? '🥇' : pos === 2 ? '🥈' : pos === 3 ? '🥉' : `#${pos}`;
-    const subject = `WK Pool update – ${match.home_team} ${match.home_score}–${match.away_score} ${match.away_team}`;
-    const html = `<div style="font-family:sans-serif;max-width:480px;margin:0 auto"><h2 style="color:#e8a020">🚕 WK Pool 2026 – Update</h2><p>Nieuwe uitslag: <strong>${match.home_team} ${match.home_score}–${match.away_score} ${match.away_team}</strong></p><h3>Jouw positie: ${medal} — ${points} punten</h3><p>Exact goed: ${exact} | Winnaar goed: ${correct} | Gespeeld: ${totalFinished}</p></div>`;
-    try {
-      await mailer.sendMail({ from, to: user.email, subject, html });
-    } catch(e) {
-      console.error(`[Mail] Fout voor ${user.email}:`, e.message);
-    }
-  }
-}
-
-// One-time admin setup: GET /make-admin?secret=...&user=...
-app.get('/make-admin', (req, res) => {
-  const secret = process.env.ADMIN_SECRET || '';
-  if (!secret || req.query.secret !== secret) return res.status(403).send('Verboden');
-  const user = req.query.user;
-  if (!user) return res.status(400).send('Geef ?user=naam op');
-  const result = db.prepare('UPDATE users SET is_admin=1 WHERE name=?').run(user);
-  if (result.changes === 0) return res.status(404).send(`Gebruiker "${user}" niet gevonden`);
-  res.send(`✅ ${user} is nu admin. Log opnieuw in.`);
-});
-
-app.listen(PORT, () => {
-  console.log(`\n🚕 SnelEenTaxi WK Pool draait op http://localhost:${PORT}`);
-  console.log(`👤 Admin account: maak een account aan met naam "${ADMIN_USER}"`);
-  if (!API_KEY) console.log(`⚠️  Geen FOOTBALL_API_KEY ingesteld. Scores handmatig invoeren via admin panel.`);
-});
+  
